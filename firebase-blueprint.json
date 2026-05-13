@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account details and chess stats.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lichessUsername": { "type": "string" },
+        "lichessRating": { "type": "number" },
+        "lichessBlitzRating": { "type": "number" },
+        "lichessClassicalRating": { "type": "number" },
+        "fairScore": { "type": "number" },
+        "isBanned": { "type": "boolean" },
+        "preferences": {
+          "type": "object",
+          "properties": {
+            "voiceEnabled": { "type": "boolean" },
+            "boardTheme": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "email"]
+    },
+    "Game": {
+      "title": "Chess Game",
+      "description": "Historical chess game record for analysis.",
+      "type": "object",
+      "properties": {
+        "gameId": { "type": "string" },
+        "userId": { "type": "string" },
+        "pgn": { "type": "string" },
+        "fen": { "type": "string" },
+        "result": { "type": "string", "enum": ["win", "loss", "draw"] },
+        "mode": { "type": "string", "enum": ["rapid", "blitz", "bullet", "classical", "standard"] },
+        "opening": { "type": "string" },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "brilliant": { "type": "number" },
+            "blunder": { "type": "number" },
+            "mistake": { "type": "number" },
+            "inaccuracy": { "type": "number" },
+            "style": {
+              "type": "object",
+              "properties": {
+                "attack": { "type": "number" },
+                "defense": { "type": "number" }
+              }
+            }
+          }
+        },
+        "isDeletedFromRecents": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "pgn", "createdAt"]
+    },
+    "OpeningStat": {
+      "title": "Opening Statistics",
+      "description": "Aggregated stats for a specific opening for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "openingName": { "type": "string" },
+        "winCount": { "type": "number" },
+        "lossCount": { "type": "number" },
+        "drawCount": { "type": "number" },
+        "totalGames": { "type": "number" },
+        "mistakeRate": { "type": "number" },
+        "blunderRate": { "type": "number" }
+      },
+      "required": ["userId", "openingName"]
+    },
+    "GameSession": {
+      "title": "Game Session",
+      "description": "Active real-time game between two or more players.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "mode": { "type": "string", "enum": ["standard", "crazyhouse"] },
+        "playerCount": { "type": "number", "enum": [2, 4, 6] },
+        "whiteTeam": { "type": "array", "items": { "type": "string" } },
+        "blackTeam": { "type": "array", "items": { "type": "string" } },
+        "whiteNames": { "type": "array", "items": { "type": "string" } },
+        "blackNames": { "type": "array", "items": { "type": "string" } },
+        "fen": { "type": "string" },
+        "history": { "type": "array" },
+        "turn": { "type": "string" },
+        "status": { "type": "string" },
+        "winner": { "type": "string" },
+        "lastMoveAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["whiteTeam", "fen", "status", "createdAt", "mode", "playerCount"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Authenticated user profiles."
+    },
+    "games/{gameId}": {
+      "schema": "Game",
+      "description": "Stored chess games for the platform."
+    },
+    "users/{userId}/openingStats/{openingId}": {
+      "schema": "OpeningStat",
+      "description": "User-specific opening performance data."
+    },
+    "gameSessions/{sessionId}": {
+      "schema": "GameSession",
+      "description": "Live real-time game sessions."
+    },
+    "publicProfiles/{userId}": {
+      "schema": "User",
+      "description": "Publicly accessible user profiles (minus PII)."
+    }
+  }
+}

@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Primitive Definitions (Helpers)
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // 2. Validation Helpers
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() <= 100 &&
+             data.email is string && data.email.size() <= 255 &&
+             (data.get('photoURL', '') is string) &&
+             (data.get('lichessUsername', '') is string) &&
+             (data.get('fairScore', 100) is number) &&
+             (data.get('isBanned', false) is bool) &&
+             (data.get('preferences', {}) is map) &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidGame(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.pgn is string && data.pgn.size() <= 100000 &&
+             (data.get('fen', '') is string) &&
+             data.userId == request.auth.uid;
+    }
+
+    // 3. Collection Match Blocks
+    
+    // Connection Test
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      
+      allow create: if isOwner(userId) && isValidUser(incoming()) &&
+        incoming().keys().hasAll(['userId', 'username', 'email', 'fairScore', 'createdAt']) &&
+        incoming().keys().size() >= 5 &&
+        incoming().fairScore == 100 &&
+        incoming().createdAt == request.time;
+      
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        // Action: Update profile/preferences
+        incoming().diff(existing()).affectedKeys().hasOnly(['username', 'photoURL', 'lichessUsername', 'lichessRating', 'lichessBlitzRating', 'lichessClassicalRating', 'preferences', 'updatedAt']) &&
+        incoming().userId == existing().userId &&
+        incoming().email == existing().email &&
+        incoming().fairScore == existing().fairScore &&
+        incoming().isBanned == existing().isBanned &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().get('updatedAt', request.time) == request.time
+      );
+      
+      // Opening Stats subcollection
+      match /openingStats/{openingId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // Public Profiles (Leaderboard Data)
+    match /publicProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    // Games Collection
+    match /games/{gameId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isValidId(gameId) && isValidGame(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time;
+        
+      allow update: if isSignedIn() && existing().userId == request.auth.uid &&
+        isValidGame(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isDeletedFromRecents', 'analysis', 'updatedAt']) &&
+        incoming().get('updatedAt', request.time) == request.time;
+
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Game Sessions Collection (Real-time Multiplayer)
+    match /gameSessions/{sessionId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && isValidId(sessionId) &&
+        incoming().whiteTeam[0] == request.auth.uid &&
+        incoming().playerCount in [2, 4, 6] &&
+        incoming().status == 'waiting' &&
+        incoming().createdAt == request.time;
+        
+      allow update: if isSignedIn() && (
+        // Action: Join Team
+        (existing().status == 'waiting' && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['whiteTeam', 'blackTeam', 'whiteNames', 'blackNames', 'status', 'lastMoveAt'])) ||
+        
+        // Action: Move
+        (existing().status == 'playing' &&
+         (request.auth.uid in existing().whiteTeam || request.auth.uid in existing().blackTeam) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['fen', 'history', 'turn', 'lastMoveAt', 'status', 'winner']))
+      );
+    }
+  }
+}

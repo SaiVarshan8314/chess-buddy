@@ -1,0 +1,6 @@
+{
+  "name": "CHESS BUDDY",
+  "description": "Interactive chess analysis and training platform with Stockfish engine, Lichess integration, and AI coaching.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": []
+}
